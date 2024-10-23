@@ -28,8 +28,7 @@ Follow these steps to set up and run the scraper:
 1. **Clone the Repository**
    ```
    git clone https://github.com/47chen/talos-crawler.git
-   cd talos-crawler
-
+   cd talos-crawle
    ```
 
 2. **Set Up a Virtual Environment** (Optional but recommended)

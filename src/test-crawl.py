@@ -92,7 +92,7 @@ def scrape_marker_data(driver, marker):
                 # Close the info window using JavaScript
                 close_button = info_window.find_element(By.CLASS_NAME, 'gm-ui-hover-effect')
                 driver.execute_script("arguments[0].click();", close_button)
-                time.sleep(1)  # Wait after closing the info window
+                time.sleep()  # Wait after closing the info window
                 return data  # Return the scraped data
             else:
                 print("Info window did not appear")
@@ -151,6 +151,20 @@ def remove_duplicates(input_file, output_file):
     
     print(f"# Duplicate rows removed. Data saved to {output_file} #")
 
+def get_all_malware_markers(driver):
+    # Get individual markers
+    individual_markers = driver.find_elements(By.CSS_SELECTOR, 
+        '.map-container div[title="Malware"][aria-label="Malware"][role="button"]')
+    
+    # Get cluster markers
+    cluster_markers = driver.find_elements(By.CSS_SELECTOR, 
+        '.map-container div[class="malware-cluster"][title="Malware"][style*="cursor: pointer"]')
+    
+    print(f"Found {len(individual_markers)} individual markers and {len(cluster_markers)} cluster markers")
+    
+    # Combine both sets
+    return individual_markers + cluster_markers
+
 
 def main():
     driver = setup_driver()
@@ -164,16 +178,12 @@ def main():
         print("Page loaded. Current URL:", driver.current_url)
         
         # Find all div elements with title="Malware" within the overview-map
-        malware_markers = driver.find_elements(By.CSS_SELECTOR, '#overview-map div[title="Malware"][style*="cursor: pointer"]')
+        # malware_markers = driver.find_elements(By.CSS_SELECTOR, '.map-container div[title="Malware"][style*="cursor: pointer"]')
+        malware_markers = get_all_malware_markers(driver)
         
         print(f"Found {len(malware_markers)} Malware markers:")
         
         # Shuffle the markers to randomize the order
-        # We shuffle the markers to randomize the order for several reasons:
-        # 1. To avoid predictable patterns in data collection, which could introduce bias
-        # 2. To distribute the load more evenly across the server, reducing the risk of being blocked
-        # 3. To potentially capture a more diverse set of data points in case we can't process all markers
-        # 4. To make the scraping behavior appear more human-like and less bot-like
         random.shuffle(malware_markers)
         
         for i, marker in enumerate(malware_markers, 1):

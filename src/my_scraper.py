@@ -32,7 +32,8 @@ def setup_driver():
     # Configure browser options for stealth operation
     options = webdriver.FirefoxOptions()
     options.add_argument("--headless")
-    options.add_argument("--window-size = 1920, 1080") #width, height
+    options.add_argument("--width=2400")
+    options.add_argument("--height=1300")
 
     # Set up anti-bot detection if there is any (via random user agents)
     user_agents = [
@@ -45,7 +46,7 @@ def setup_driver():
         "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/109.0",
     ]
 
-    # Init webdriver with anti-bot detection and optimal configuration
+    # Randomly select a user agent
     options.set_preference("general.useragent.override", random.choice(user_agents))
 
     service = FirefoxService(GeckoDriverManager().install())
@@ -73,21 +74,25 @@ def scrape_marker_data(driver, marker):
 
             # Try to click using different methods
             try:
+                print('ActionChains click')
                 ActionChains(driver).move_to_element(marker).click().perform()
             except:
                 try:
+                    print('execute_script click')
                     driver.execute_script("arguments[0].click();", marker)
                 except:
+                    print('marker click')
                     marker.click()
 
             # Wait for the info window to appear
-            info_window = wait_for_element(driver, By.CLASS_NAME, 'gm-style-iw-c', timeout=5)  # Increased timeout
+            # *** gm-style-iw-c is the class name for the info window to appear. For more details, go to dev tools on the browser. 
+            info_window = wait_for_element(driver, By.CLASS_NAME, 'gm-style-iw', timeout=5)  
             
             if info_window:
                 # Find the table within the info window
                 table = info_window.find_element(By.CLASS_NAME, 'iw-table')
                 screenshot_filename = f"success_screenshot_{time.time()}.png"
-                screenshot_path = os.path.join('..', 'data', screenshot_filename)
+                screenshot_path = os.path.join('..', 'data', 'screenshot', screenshot_filename)
                 driver.save_screenshot(screenshot_path)
                 print(f"Screenshot saved: {screenshot_path}")
                 
@@ -112,10 +117,15 @@ def scrape_marker_data(driver, marker):
                 # Close the info window using JavaScript
                 close_button = info_window.find_element(By.CLASS_NAME, 'gm-ui-hover-effect')
                 driver.execute_script("arguments[0].click();", close_button)
-                time.sleep(1)  # Wait after closing the info window
+                time.sleep(2)  # Wait after closing the info window
                 return data  # Return the scraped data
             else:
                 print("Info window did not appear")
+                failure_screenshot_filename = f"failure_screenshot_{time.time()}.png"
+                failure_screenshot_path = os.path.join('..', 'data', 'screenshot', failure_screenshot_filename)
+                os.makedirs(os.path.dirname(failure_screenshot_path), exist_ok=True)
+                driver.save_screenshot(failure_screenshot_path)
+                print(f"Failure screenshot saved: {failure_screenshot_path}")
         
         except (ElementClickInterceptedException, ElementNotInteractableException) as e:
             print(f"Attempt {attempt + 1} failed: {e}")
@@ -175,11 +185,11 @@ def remove_duplicate(input_file, output_file):
 def get_all_malware_markers(driver):
     # Get individual markers
     individual_markers = driver.find_elements(By.CSS_SELECTOR, 
-        '#overview-map div[title="Malware"][aria-label="Malware"][role="button"]')
+        '.map-container div[title="Malware"][aria-label="Malware"][role="button"]')
     
     # Get cluster markers
     cluster_markers = driver.find_elements(By.CSS_SELECTOR, 
-        '#overview-map div[class="malware-cluster"][title="Malware"][style*="cursor: pointer"]')
+        '.map-container div[class="malware-cluster"][title="Malware"][style*="cursor: pointer"]')
     
     print(f"Found {len(individual_markers)} individual markers and {len(cluster_markers)} cluster markers")
     
@@ -196,29 +206,29 @@ def main():
         driver.get("https://www.talosintelligence.com/reputation_center/")
         
         # Wait for the map to load
-        time.sleep(10)
-        print("Page loaded. Currenty URL:", driver.current_url)
+        time.sleep(20)  # Increased wait time
+        print("Page loaded. Current URL:", driver.current_url)
 
         # Find all div elements with <title="Malware" style=cursor:pointer> within the overview-map
         # *** This div element is the malware marker on the map ***
         # malware_markers = driver.find_elements(By.CSS_SELECTOR, '#overview-map div[title="Malware"][style*="cursor: pointer"]')
         malware_markers = get_all_malware_markers(driver)
         
-        print(f"# Found {len(malware_markers)} malware markers on the map #")
-
-        # Shuffle the markers to randomize the scraping order - more human-like and less bot-like behavior
+        print(f"Found {len(malware_markers)} Malware markers:")
+        
+        # Shuffle the markers to randomize the order
         random.shuffle(malware_markers)
 
         for i, marker in enumerate(malware_markers, 1):
-            print(f"Processing Marker {i} of {len(malware_markers)}")
+            print(f"Processing Marker {i}:")
             data = scrape_marker_data(driver, marker)
             all_data.extend(data)
-            time.sleep(random.uniform(2, 4))
-
+            time.sleep(random.uniform(2, 5))  # Increased random delay between markers
+        
     finally:
         driver.quit()
     
-    # Save all scraped data to CSV with current timestamp and remove duplicates
+    # Save all scraped data to CSV with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     base_filename = f"raw_data_{timestamp}"
     csv_filename = save_to_csv(all_data, base_filename)
