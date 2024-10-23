@@ -1,17 +1,3 @@
-"""
-Package overview and usages
-- time: Delay to prevent overwhelming the server
-- random: To generate random delays and user agents for more human-like behavior
-- selenium: The CORE package for browser automation
-- selenium.webdriver: To interact with the browser for different service
-    - ex. Chrome or Firefox
-
-- webdriver_manager.firefox: For automatic management of Firefox driver versions
-- selenium.webdriver.ActionChains: To perform complex mouse and keyboard actions
-- selenium.webdriver.common.by: For element locator strategies
-- selenium.webdriver.support.ui.WebDriverWait: To implement explicit waits
-- selenium.webdriver.support.expected_conditions: Conditions for explicit waits
-"""
 import time
 import random
 import csv
@@ -19,7 +5,6 @@ import os
 from datetime import datetime
 from collections import OrderedDict
 from selenium import webdriver
-# you can use other browser service like ChromeService
 from selenium.webdriver.firefox.service import Service as FirefoxService
 from webdriver_manager.firefox import GeckoDriverManager
 from selenium.webdriver import ActionChains
@@ -29,12 +14,10 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, ElementClickInterceptedException, ElementNotInteractableException
 
 def setup_driver():
-    # Configure browser options for stealth operation
     options = webdriver.FirefoxOptions()
-    options.add_argument("--headless")
-    options.add_argument("--window-size = 1920, 1080") #width, height
-
-    # Set up anti-bot detection if there is any (via random user agents)
+    options.add_argument('--headless')
+    options.add_argument('--width=1980')
+    options.add_argument('--height=1080')
     user_agents = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/109.0",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/109.0",
@@ -44,23 +27,20 @@ def setup_driver():
         "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/109.0",
         "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/109.0",
     ]
-
-    # Init webdriver with anti-bot detection and optimal configuration
+    
+    # Randomly select a user agent
     options.set_preference("general.useragent.override", random.choice(user_agents))
-
+    
     service = FirefoxService(GeckoDriverManager().install())
     return webdriver.Firefox(service=service, options=options)
 
-"""
-Wait for an element to be present in the DOM
-Prevents race conditions where elements might not be immediately available
-"""
-def wait_for_element(driver, by_attribute, attribute_value, timeout=5):
+def wait_for_element(driver, by, value, timeout=5):
     try:
         return WebDriverWait(driver, timeout).until(
-            EC.presence_of_element_located((by_attribute, attribute_value)))
+            EC.presence_of_element_located((by, value))
+        )
     except TimeoutException:
-        print(f"Timeout waiting for element: {by_attribute} = {attribute_value}")
+        print(f"Timeout waiting for element: {by}={value}")
         return None
 
 def scrape_marker_data(driver, marker):
@@ -128,7 +108,6 @@ def scrape_marker_data(driver, marker):
     print(f"Failed to scrape marker after {max_attempts} attempts")
     return []
 
-# You can use different file formats like JSON, Excel, etc for your use case.
 def save_to_csv(data, base_filename):
     # Generate filename with current date and timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -148,7 +127,7 @@ def save_to_csv(data, base_filename):
     return filepath
 
 # Remove duplicate rows from the CSV file
-def remove_duplicate(input_file, output_file):
+def remove_duplicates(input_file, output_file):
     unique_rows = OrderedDict()
 
     with open(input_file, 'r', newline = "") as csvfile:
@@ -172,66 +151,50 @@ def remove_duplicate(input_file, output_file):
     
     print(f"# Duplicate rows removed. Data saved to {output_file} #")
 
-def get_all_malware_markers(driver):
-    # Get individual markers
-    individual_markers = driver.find_elements(By.CSS_SELECTOR, 
-        '#overview-map div[title="Malware"][aria-label="Malware"][role="button"]')
-    
-    # Get cluster markers
-    cluster_markers = driver.find_elements(By.CSS_SELECTOR, 
-        '#overview-map div[class="malware-cluster"][title="Malware"][style*="cursor: pointer"]')
-    
-    print(f"Found {len(individual_markers)} individual markers and {len(cluster_markers)} cluster markers")
-    
-    # Combine both sets
-    return individual_markers + cluster_markers
 
 def main():
-
     driver = setup_driver()
     all_data = []
-
     try:
-        print("Navigating to the page... ")
+        print("Navigating to the page...")
         driver.get("https://www.talosintelligence.com/reputation_center/")
         
         # Wait for the map to load
-        time.sleep(10)
-        print("Page loaded. Currenty URL:", driver.current_url)
-
-        # Find all div elements with <title="Malware" style=cursor:pointer> within the overview-map
-        # *** This div element is the malware marker on the map ***
-        # malware_markers = driver.find_elements(By.CSS_SELECTOR, '#overview-map div[title="Malware"][style*="cursor: pointer"]')
-        malware_markers = get_all_malware_markers(driver)
+        time.sleep(20)  # Increased wait time
+        print("Page loaded. Current URL:", driver.current_url)
         
-        print(f"# Found {len(malware_markers)} malware markers on the map #")
-
-        # Shuffle the markers to randomize the scraping order - more human-like and less bot-like behavior
+        # Find all div elements with title="Malware" within the overview-map
+        malware_markers = driver.find_elements(By.CSS_SELECTOR, '#overview-map div[title="Malware"][style*="cursor: pointer"]')
+        
+        print(f"Found {len(malware_markers)} Malware markers:")
+        
+        # Shuffle the markers to randomize the order
+        # We shuffle the markers to randomize the order for several reasons:
+        # 1. To avoid predictable patterns in data collection, which could introduce bias
+        # 2. To distribute the load more evenly across the server, reducing the risk of being blocked
+        # 3. To potentially capture a more diverse set of data points in case we can't process all markers
+        # 4. To make the scraping behavior appear more human-like and less bot-like
         random.shuffle(malware_markers)
-
+        
         for i, marker in enumerate(malware_markers, 1):
-            print(f"Processing Marker {i} of {len(malware_markers)}")
+            print(f"Processing Marker {i}:")
             data = scrape_marker_data(driver, marker)
             all_data.extend(data)
-            time.sleep(random.uniform(2, 4))
-
+            time.sleep(random.uniform(2, 5))  # Increased random delay between markers
+        
     finally:
         driver.quit()
     
-    # Save all scraped data to CSV with current timestamp and remove duplicates
+    # Save all scraped data to CSV with timestamp
+    base_filename = 'result-malware-after-adjust-css-selector'
+    csv_file = save_to_csv(all_data, base_filename)
+    print(f"Scraped data saved to {csv_file}")
+
+    # Remove duplicates
+    unique_base_filename = 'result-malware-unique'
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    base_filename = f"raw_data_{timestamp}"
-    csv_filename = save_to_csv(all_data, base_filename)
-
-    # Remove duplicate rows from the CSV file
-    result_csv_file = os.path.join('..', 'data', f"malware_data_result_{timestamp}.csv")
-    
-    remove_duplicate(csv_filename, result_csv_file)
-
-    print(f"All done! Result saved to {result_csv_file}")
+    unique_csv_file = f"{unique_base_filename}_{timestamp}.csv"
+    remove_duplicates(csv_file, unique_csv_file)
 
 if __name__ == "__main__":
     main()
-
-
-        
