@@ -1,0 +1,1 @@
+crawl for all the links on the page and save them to a file on talos
