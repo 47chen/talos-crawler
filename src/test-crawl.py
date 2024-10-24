@@ -92,7 +92,7 @@ def scrape_marker_data(driver, marker):
                 # Close the info window using JavaScript
                 close_button = info_window.find_element(By.CLASS_NAME, 'gm-ui-hover-effect')
                 driver.execute_script("arguments[0].click();", close_button)
-                time.sleep()  # Wait after closing the info window
+                time.sleep(2)  # Wait after closing the info window
                 return data  # Return the scraped data
             else:
                 print("Info window did not appear")
@@ -174,11 +174,18 @@ def main():
         driver.get("https://www.talosintelligence.com/reputation_center/")
         
         # Wait for the map to load
-        time.sleep(20)  # Increased wait time
+        WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located((By.CLASS_NAME, 'map-container'))
+        )
         print("Page loaded. Current URL:", driver.current_url)
         
-        # Find all div elements with title="Malware" within the overview-map
-        # malware_markers = driver.find_elements(By.CSS_SELECTOR, '.map-container div[title="Malware"][style*="cursor: pointer"]')
+        # Uncheck "Legitimate Email" and "Spam" buttons
+        uncheck_buttons(driver)
+        
+        # Wait for the map to update
+        time.sleep(5)
+        
+        # Find all malware markers
         malware_markers = get_all_malware_markers(driver)
         
         print(f"Found {len(malware_markers)} Malware markers:")
@@ -205,6 +212,22 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     unique_csv_file = f"{unique_base_filename}_{timestamp}.csv"
     remove_duplicates(csv_file, unique_csv_file)
+
+# Function to uncheck the buttons
+def uncheck_buttons(driver):
+    buttons_to_uncheck = ['legit-button', 'spam-button']
+    for button_id in buttons_to_uncheck:
+        try:
+            button = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.ID, button_id))
+            )
+            
+            print(button)
+            if button.get_attribute('value') in ['legit', 'spam']:
+                driver.execute_script("arguments[0].click();", button)
+            print(f"Unchecked {button_id}")
+        except Exception as e:
+            print(f"Error unchecking {button_id}: {e}")
 
 if __name__ == "__main__":
     main()
